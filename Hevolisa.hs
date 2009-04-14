@@ -37,6 +37,7 @@ data Options = Options
     , optSampleSize :: Double
     , optWriteInterval :: Integer
     , optGenerationSize :: Integer
+    , optLineageLength :: Integer
     } deriving ( Show )
 
 defaultOptions = Options
@@ -46,6 +47,7 @@ defaultOptions = Options
                  , optShowGen = False
                  , optWriteInterval = 1000
                  , optGenerationSize = 1
+                 , optLineageLength = 5
                  }
 
 options :: [OptDescr (Options -> Options)]
@@ -59,10 +61,15 @@ options = [ Option ['h'] ["help"] (NoArg (\opts -> opts { optHelp = True } ))
                    "Scale the image down internally; increases speed but hurts output quality"
           , Option [] ["write-interval"] (ReqArg (\r opts -> opts { optWriteInterval = read r } ) "interval")
                    "Write an image every <interval> generations"
+          -- FIXME: how do you signal errors with getopt?
           , Option [] ["generation-size"] (ReqArg (\r opts -> let rr = read r
                                                               in if rr < 1 then error "Less than one individual cannot be reproduced"
-                                                                          else opts { optGenerationSize = rr } ) "size")
+                                                                           else opts { optGenerationSize = rr } ) "size")
                    "How many individuals per generation"
+          , Option [] ["lineage-length"] (ReqArg (\r opts -> let rr = read r
+                                                             in if rr < 1 then error "How exactly could you habe a lineage of less than one?"
+                                                                          else opts { optLineageLength = rr } ) "length")
+                   "Number of generations lineages are allowed to diverge before being remerged"
           ]
 
 main :: IO ()
@@ -93,7 +100,9 @@ data Evolver = Evolver
 
 start :: Options -> FilePath -> IO ()
 start opts path = do
-  e <- startEvolution EvolutionSettings { setGenerationSize = optGenerationSize opts }
+  e <- startEvolution EvolutionSettings { setGenerationSize = optGenerationSize opts
+                                        , setLineageLength = optLineageLength opts 
+                                        }
   let opts' = opts { optResize = optResize opts * (1.0 / optSampleSize opts) }
   let loop i imprv = do
         g <- readChan (echan e)

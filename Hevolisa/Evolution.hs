@@ -18,14 +18,14 @@ import Hevolisa.Settings
 type Delta = Integer
 
 -- | Context contains the current drawing and the source image for comparison
-data EvolutionContext = EvolutionContext {
-      drawing :: DnaDrawing,
-      image   :: [Int],
-      delta   :: Delta,
-      improvement :: Delta, -- ^ how much better did we get
-      width   :: Int,
-      height  :: Int
-} deriving (Show, Eq)
+data EvolutionContext = EvolutionContext 
+    { drawing :: DnaDrawing
+    , image   :: [Int]
+    , delta   :: Delta
+    , improvement :: Delta -- ^ how much better did we get
+    , width   :: Int
+    , height  :: Int
+    } deriving (Show, Eq)
 
 instance MutableImageInfo EvolutionContext where
     getWidth = width
@@ -34,9 +34,10 @@ instance MutableImageInfo EvolutionContext where
 instance Ord EvolutionContext where
     compare = compare `on` delta
 
-data EvolutionSettings = EvolutionSettings {
-      setGenerationSize :: Integer
-}
+data EvolutionSettings = EvolutionSettings 
+    { setGenerationSize :: Integer
+    , setLineageLength :: Integer
+    }
 
 -- | Init the context with image and initial drawing
 initContext :: [Int] -> Int -> Int -> IO EvolutionContext
@@ -48,15 +49,25 @@ initContext image w h = do
 evolve :: EvolutionSettings -> Chan EvolutionContext -> Int -> Int -> [Int] -> IO ()
 evolve sets gens w h srf = do
   c <- updateDelta =<< initContext srf w h
-  iter sets gens 0 c
+  iter sets gens c
 
--- | Recursive function combines mutation and writing files
-iter :: EvolutionSettings -> Chan EvolutionContext -> Int -> EvolutionContext -> IO ()
-iter sets gens n ec = do 
+iter :: EvolutionSettings -> Chan EvolutionContext -> EvolutionContext -> IO ()
+iter sets gens ec = do 
   writeChan gens ec
+  ec' <- lineage sets (setLineageLength sets) ec
+  iter sets gens $ if delta ec' < delta ec 
+                   then ec' { improvement = delta ec - delta ec'}
+                   else ec { improvement = 0 } -- no change => no improvement
+
+lineage :: EvolutionSettings
+        -> Integer          -- ^ number of generations still to do in lineage
+        -> EvolutionContext -- ^ image that we're working on and assorted data
+        -> IO EvolutionContext
+lineage _    0 ec = return ec    
+lineage sets n ec = do
   ec' <- return . minimum =<< mapM mutateEvolutionContext 
                               (replicate (fromIntegral $ setGenerationSize sets) ec)
-  iter sets gens (n + 1) $ if delta ec' < delta ec 
+  lineage sets (n - 1) $ if delta ec' < delta ec 
                            then ec' 
                            else ec { improvement = 0 } -- no change => no improvement
 
