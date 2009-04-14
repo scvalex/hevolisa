@@ -36,6 +36,7 @@ data Options = Options
     , optShowGen :: Bool
     , optSampleSize :: Double
     , optWriteInterval :: Integer
+    , optGenerationSize :: Integer
     } deriving ( Show )
 
 defaultOptions = Options
@@ -44,6 +45,7 @@ defaultOptions = Options
                  , optSampleSize = 1.0
                  , optShowGen = False
                  , optWriteInterval = 1000
+                 , optGenerationSize = 1
                  }
 
 options :: [OptDescr (Options -> Options)]
@@ -57,6 +59,10 @@ options = [ Option ['h'] ["help"] (NoArg (\opts -> opts { optHelp = True } ))
                    "Scale the image down internally; increases speed but hurts output quality"
           , Option [] ["write-interval"] (ReqArg (\r opts -> opts { optWriteInterval = read r } ) "interval")
                    "Write an image every <interval> generations"
+          , Option [] ["generation-size"] (ReqArg (\r opts -> let rr = read r
+                                                              in if rr < 1 then error "Less than one individual cannot be reproduced"
+                                                                          else opts { optGenerationSize = rr } ) "size")
+                   "How many individuals per generation"
           ]
 
 main :: IO ()
@@ -87,7 +93,7 @@ data Evolver = Evolver
 
 start :: Options -> FilePath -> IO ()
 start opts path = do
-  e <- startEvolution
+  e <- startEvolution EvolutionSettings { setGenerationSize = optGenerationSize opts }
   let opts' = opts { optResize = optResize opts * (1.0 / optSampleSize opts) }
   let loop i imprv = do
         g <- readChan (echan e)
@@ -111,7 +117,7 @@ start opts path = do
             | otherwise       = return ()
         isTimeToWrite :: Integer -> Bool
         isTimeToWrite n = n `mod` (optWriteInterval opts) == 0
-        startEvolution = do
+        startEvolution sets = do
                     fileExists <- doesFileExist path
                     unless fileExists $ error $ "File does not exist: " ++ path
                     gens <- newChan
@@ -129,7 +135,7 @@ start opts path = do
                                 us' <- unpackSurface srf'
                                 w' <- C.imageSurfaceGetWidth srf'
                                 h' <- C.imageSurfaceGetHeight srf'
-                                forkIO $ evolve gens w' h' us' `catch` somethingErred "Evolve"
+                                forkIO $ evolve sets gens w' h' us' `catch` somethingErred "Evolve"
                                 return (w', h')
                     return $ Evolver gens w h
 

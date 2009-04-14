@@ -9,6 +9,7 @@
 module Hevolisa.Evolution where
 
 import Control.Concurrent.Chan
+import Data.Function ( on )
 import Hevolisa.Shapes.DnaDrawing
 import Hevolisa.Tools
 import Hevolisa.Renderer
@@ -30,6 +31,13 @@ instance MutableImageInfo EvolutionContext where
     getWidth = width
     getHeight = height
 
+instance Ord EvolutionContext where
+    compare = compare `on` delta
+
+data EvolutionSettings = EvolutionSettings {
+      setGenerationSize :: Integer
+}
+
 -- | Init the context with image and initial drawing
 initContext :: [Int] -> Int -> Int -> IO EvolutionContext
 initContext image w h = do
@@ -37,20 +45,20 @@ initContext image w h = do
   return $ EvolutionContext drawing image (-1) 0 w h
 
 -- | Start the evolution process
-evolve :: Chan EvolutionContext -> Int -> Int -> [Int] -> IO ()
-evolve gens w h srf = do
+evolve :: EvolutionSettings -> Chan EvolutionContext -> Int -> Int -> [Int] -> IO ()
+evolve sets gens w h srf = do
   c <- updateDelta =<< initContext srf w h
-  iter gens 0 c
+  iter sets gens 0 c
 
 -- | Recursive function combines mutation and writing files
-iter :: Chan EvolutionContext -> Int -> EvolutionContext -> IO ()
-iter gens n ec = do 
+iter :: EvolutionSettings -> Chan EvolutionContext -> Int -> EvolutionContext -> IO ()
+iter sets gens n ec = do 
   writeChan gens ec
-  ec' <- mutateEvolutionContext ec
-  -- FIXME add multiple mutations per generation HERE
-  iter gens (n + 1) $ if delta ec' < delta ec 
-                      then ec' 
-                      else ec { improvement = 0 } -- no change => no improvement
+  ec' <- return . minimum =<< mapM mutateEvolutionContext 
+                              (replicate (fromIntegral $ setGenerationSize sets) ec)
+  iter sets gens (n + 1) $ if delta ec' < delta ec 
+                           then ec' 
+                           else ec { improvement = 0 } -- no change => no improvement
 
 -- | Color error, smaller is better
 updateDelta :: EvolutionContext -> IO EvolutionContext
