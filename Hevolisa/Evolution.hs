@@ -21,6 +21,7 @@ data EvolutionContext = EvolutionContext {
       drawing :: DnaDrawing,
       image   :: [Int],
       delta   :: Delta,
+      improvement :: Delta, -- ^ how much better did we get
       width   :: Int,
       height  :: Int
 } deriving (Show, Eq)
@@ -32,8 +33,8 @@ instance MutableImageInfo EvolutionContext where
 -- | Init the context with image and initial drawing
 initContext :: [Int] -> Int -> Int -> IO EvolutionContext
 initContext image w h = do
-  drawing <- randomInit (EvolutionContext blankDrawing [] (-1) w h)
-  return $ EvolutionContext drawing image (-1) w h
+  drawing <- randomInit (EvolutionContext blankDrawing [] (-1) 0 w h)
+  return $ EvolutionContext drawing image (-1) 0 w h
 
 -- | Start the evolution process
 evolve :: Chan EvolutionContext -> Int -> Int -> [Int] -> IO ()
@@ -46,13 +47,16 @@ iter :: Chan EvolutionContext -> Int -> EvolutionContext -> IO ()
 iter gens n ec = do 
   writeChan gens ec
   ec' <- mutateEvolutionContext ec
-  iter gens (n + 1) $ if delta ec' < delta ec then ec' else ec
+  -- FIXME add multiple mutations per generation HERE
+  iter gens (n + 1) $ if delta ec' < delta ec 
+                      then ec' 
+                      else ec { improvement = 0 } -- no change => no improvement
 
 -- | Color error, smaller is better
 updateDelta :: EvolutionContext -> IO EvolutionContext
 updateDelta ec = do
   d' <- drawingDelta (drawing ec) (width ec) (height ec) (image ec)
-  return ec { delta = d' }
+  return ec { delta = d', improvement = delta ec - d' }
 
 -- | Mutate the drawing in the EvolutionContext
 mutateEvolutionContext :: EvolutionContext -> IO EvolutionContext

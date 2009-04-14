@@ -67,7 +67,7 @@ instance Resizable DnaDrawing where
     resize f d = d { polygons = map (resize f) $ polygons d }
 
 -- | Render generations
-instance Renderable Int where
+instance Renderable Integer where
     render n = do C.moveTo 10 20
                   C.setFontSize 10
                   C.setSourceRGB 0 0 1
@@ -110,7 +110,7 @@ unpackSurface s = C.imageSurfaceGetData s >>=
       removeAlpha _            = Prelude.error "wrong number of color values"
 
 -- | Rasterize the drawing and save it to a file
-drawingToFile :: DnaDrawing -> Int -> Int -> Int -> Bool -> IO ()
+drawingToFile :: DnaDrawing -> Int -> Int -> Integer -> Bool -> IO ()
 drawingToFile d w h n sg = do
   C.withImageSurface C.FormatRGB24 w h $ \surface -> do
                       C.renderWith surface $ do render d

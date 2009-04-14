@@ -18,6 +18,7 @@ import Control.Monad.Trans
 import qualified Graphics.Rendering.Cairo as C
 import Hevolisa.Evolution
 import Hevolisa.Renderer
+import Hevolisa.Shapes.DnaDrawing ( DnaDrawing )
 import System.Console.GetOpt
 import System.Directory
 import System.Environment ( getArgs )
@@ -34,7 +35,7 @@ data Options = Options
     , optResize :: Double
     , optShowGen :: Bool
     , optSampleSize :: Double
-    , optWriteInterval :: Int
+    , optWriteInterval :: Integer
     } deriving ( Show )
 
 defaultOptions = Options
@@ -88,9 +89,9 @@ start :: Options -> FilePath -> IO ()
 start opts path = do
   e <- startEvolution
   let opts' = opts { optResize = optResize opts * (1.0 / optSampleSize opts) }
-  let loop i = do
+  let loop i imprv = do
         g <- readChan (echan e)
-        printf "Generation %d: d = %d\n" i (delta g)
+        printf "Generation %d: d= %d; s= %d d/g\n" i (delta g) (imprv `div` i)
         if optResize opts' == 1.0
           then maybeWriteToFile i (drawing g) (width g) (height g)
           else do
@@ -99,12 +100,16 @@ start opts path = do
                 rw = round $ (fromIntegral $ width g) * f
                 rh = round $ (fromIntegral $ height g) * f
             maybeWriteToFile i rd rw rh
-        loop $ i+1
-  loop 0
+        if i == 1
+           then loop 2 0 -- no improvement on first generation
+           else loop (i+1) (imprv + improvement g)
+  loop 1 0 -- first generation zero results in divide by zero exception
       where 
+        maybeWriteToFile :: Integer -> DnaDrawing -> Int -> Int -> IO ()
         maybeWriteToFile n d w h
             | isTimeToWrite n = drawingToFile d w h n ( optShowGen opts )
             | otherwise       = return ()
+        isTimeToWrite :: Integer -> Bool
         isTimeToWrite n = n `mod` (optWriteInterval opts) == 0
         startEvolution = do
                     fileExists <- doesFileExist path
