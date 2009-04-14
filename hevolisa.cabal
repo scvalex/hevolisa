@@ -26,4 +26,4 @@ Executable hevolisa
         Build-Depends:	base >= 4, directory, mtl,
                         cairo >= 0.10.0, bytestring >= 0.9.1.4,
                         filepath >= 1.1.0.1, random
-        ghc-options:	-O2
+        ghc-options:	-O2 -threaded

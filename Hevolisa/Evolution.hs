@@ -8,7 +8,8 @@
 
 module Hevolisa.Evolution where
 
-import Control.Concurrent.Chan
+import Control.Concurrent
+import Control.Monad
 import Data.Function ( on )
 import Hevolisa.Shapes.DnaDrawing
 import Hevolisa.Tools
@@ -54,7 +55,7 @@ evolve sets gens w h srf = do
 iter :: EvolutionSettings -> Chan EvolutionContext -> EvolutionContext -> IO ()
 iter sets gens ec = do 
   writeChan gens ec
-  ec' <- lineage sets (setLineageLength sets) ec
+  ec' <- return . minimum =<< mapM takeMVar =<< replicateM 2 (lineage sets (setLineageLength sets) ec)
   iter sets gens $ if delta ec' < delta ec 
                    then ec' { improvement = delta ec - delta ec'}
                    else ec { improvement = 0 } -- no change => no improvement
@@ -62,14 +63,19 @@ iter sets gens ec = do
 lineage :: EvolutionSettings
         -> Integer          -- ^ number of generations still to do in lineage
         -> EvolutionContext -- ^ image that we're working on and assorted data
-        -> IO EvolutionContext
-lineage _    0 ec = return ec    
+        -> IO (MVar EvolutionContext)
 lineage sets n ec = do
-  ec' <- return . minimum =<< mapM mutateEvolutionContext 
-                              (replicate (fromIntegral $ setGenerationSize sets) ec)
-  lineage sets (n - 1) $ if delta ec' < delta ec 
-                           then ec' 
-                           else ec { improvement = 0 } -- no change => no improvement
+  o <- newEmptyMVar
+  forkIO $ go o n ec
+  return o
+      where
+        go o 0 ec = putMVar o ec
+        go o n ec = do
+          ec' <- return . minimum =<< mapM mutateEvolutionContext 
+                                     (replicate (fromIntegral $ setGenerationSize sets) ec)
+          go o (n - 1) $ if delta ec' < delta ec 
+                                 then ec' 
+                                 else ec { improvement = 0 } -- no change => no improvement
 
 -- | Color error, smaller is better
 updateDelta :: EvolutionContext -> IO EvolutionContext
