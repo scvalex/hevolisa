@@ -4,7 +4,7 @@ all:
 	cd $(SRC) &&\
 	cabal configure &&\
 	cabal build &&\
-	./dist/build/hevolisa/hevolisa --write-interval 200 --sample-size 0.8 --resize 3 alex_mic.png
+	./dist/build/hevolisa/hevolisa --write-interval 200 --sample-size 0.2 --resize 1.5 alex.png
 
 clean:
 	cd $(SRC) &&\
